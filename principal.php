@@ -108,7 +108,7 @@ if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
                 <h3>Menu</h3>
                 <ul>
                     <li>Dashboard</li>
-                    <a href= "cadastraruser.php"> <li>Cadastrar</li> </a>
+                    <a href="cadastrar_usuario.php"><li>Cadastrar Usuário</li></a>
                     <li>Configurações</li>
                 </ul>
             </div>
