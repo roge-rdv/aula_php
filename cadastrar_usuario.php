@@ -2,19 +2,16 @@
 session_start();
 require 'conexao.php';
 
-// Verifica se o usuário está logado
 if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
     header("Location: index.php");
     exit();
 }
-
-// Processa a exclusão de usuário
 if (isset($_GET['excluir'])) {
-    $id = intval($_GET['excluir']); // Sanitiza o ID
+    $senha = intval($_GET['excluir']); 
 
     try {
-        $stmt = $conexao->prepare("DELETE FROM usuarios WHERE id = ?");
-        $stmt->bind_param("i", $id);
+        $stmt = $conexao->prepare("DELETE FROM usuarios WHERE senha = ?");
+        $stmt->bind_param("i", $senha);
         if ($stmt->execute()) {
             $_SESSION['mensagem'] = "Usuário excluído com sucesso!";
         } else {
@@ -27,21 +24,19 @@ if (isset($_GET['excluir'])) {
     exit();
 }
 
-// Processa o cadastro de novo usuário
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $nome = trim($_POST['nome']);
-    $cpf = preg_replace("/[^0-9]/", "", $_POST['cpf']); // Remove formatação
+    $cpf = preg_replace("/[^0-9]/", "", $_POST['cpf']); 
     $senha = trim($_POST['senha']);
 
-    // Validação básica
     if (empty($nome) || empty($cpf) || empty($senha)) {
         $_SESSION['erro'] = "Todos os campos são obrigatórios!";
     } elseif (strlen($cpf) != 11) {
         $_SESSION['erro'] = "CPF inválido! Deve conter 11 dígitos.";
     } else {
         try {
-            // Verifica se o CPF já existe
-            $stmt = $conexao->prepare("SELECT id FROM usuarios WHERE cpf = ?");
+        
+            $stmt = $conexao->prepare("SELECT senha FROM usuarios WHERE cpf = ?");
             $stmt->bind_param("s", $cpf);
             $stmt->execute();
             $stmt->store_result();
@@ -49,10 +44,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($stmt->num_rows > 0) {
                 $_SESSION['erro'] = "CPF já cadastrado!";
             } else {
-                // Hash da senha
+                
                 $senha_hash = password_hash($senha, PASSWORD_DEFAULT);
 
-                // Insere no banco
+              
                 $stmt = $conexao->prepare("INSERT INTO usuarios (nome, cpf, senha) VALUES (?, ?, ?)");
                 $stmt->bind_param("sss", $nome, $cpf, $senha_hash);
                 
@@ -70,10 +65,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     exit();
 }
 
-// Busca todos os usuários
 $usuarios = [];
 try {
-    $stmt = $conexao->prepare("SELECT id, nome, cpf FROM usuarios");
+    $stmt = $conexao->prepare("SELECT senha, nome, cpf FROM usuarios");
     $stmt->execute();
     $resultado = $stmt->get_result();
     $usuarios = $resultado->fetch_all(MYSQLI_ASSOC);
@@ -186,7 +180,6 @@ try {
 </head>
 <body>
     <div class="container">
-        <!-- Mensagens de feedback -->
         <?php if(isset($_SESSION['mensagem'])): ?>
             <div class="mensagem sucesso">
                 <?= $_SESSION['mensagem'] ?>
@@ -200,8 +193,6 @@ try {
                 <?php unset($_SESSION['erro']); ?>
             </div>
         <?php endif; ?>
-
-        <!-- Formulário de cadastro -->
         <div class="card">
             <h2>Cadastrar Novo Usuário</h2>
             <form method="POST">
@@ -212,19 +203,17 @@ try {
                 
                 <div class="form-group">
                     <label>CPF (apenas números):</label>
-                    <input type="text" name="cpf" pattern="\d{11}" title="11 dígitos numéricos" required>
+                    <input type="text" name="cpf" required>
                 </div>
                 
                 <div class="form-group">
                     <label>Senha:</label>
-                    <input type="password" name="senha" minlength="6" required>
+                    <input type="password" name="senha" required>
                 </div>
                 
                 <button type="submit">Cadastrar Usuário</button>
             </form>
         </div>
-
-        <!-- Listagem de usuários -->
         <div class="card">
             <h2>Usuários Cadastrados</h2>
             <table>
@@ -241,8 +230,8 @@ try {
                             <td><?= htmlspecialchars($usuario['nome']) ?></td>
                             <td><?= formatarCPF($usuario['cpf']) ?></td>
                             <td class="acoes">
-                                <a href="alterar_usuario.php?id=<?= $usuario['id'] ?>" class="editar">Editar</a>
-                                <a href="cadastrar_usuario.php?excluir=<?= $usuario['id'] ?>" 
+                                <a href="alterar_usuario.php?senha=<?= $usuario['senha'] ?>" class="editar">Editar</a>
+                                <a href="cadastrar_usuario.php?excluir=<?= $usuario['senha'] ?>" 
                                    class="excluir" 
                                    onclick="return confirm('Tem certeza que deseja excluir este usuário?')">Excluir</a>
                             </td>
@@ -256,8 +245,3 @@ try {
 </html>
 
 <?php
-// Função para formatar CPF
-function formatarCPF($cpf) {
-    return substr($cpf, 0, 3) . '.' . substr($cpf, 3, 3) . '.' . substr($cpf, 6, 3) . '-' . substr($cpf, 9, 2);
-}
-?>
