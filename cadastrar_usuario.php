@@ -6,242 +6,144 @@ if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
     header("Location: index.php");
     exit();
 }
-if (isset($_GET['excluir'])) {
-    $senha = intval($_GET['excluir']); 
 
-    try {
-        $stmt = $conexao->prepare("DELETE FROM usuarios WHERE senha = ?");
-        $stmt->bind_param("i", $senha);
-        if ($stmt->execute()) {
-            $_SESSION['mensagem'] = "Usuário excluído com sucesso!";
+if (isset($_GET['excluir_cpf'])) {
+    $cpf_para_excluir = $_GET['excluir_cpf'];
+
+    $cpf_limpo_excluir = preg_replace("/[^0-9]/", "", $cpf_para_excluir);
+
+    if (strlen($cpf_limpo_excluir) == 11) {
+        if (isset($_SESSION['usuario_cpf']) && $_SESSION['usuario_cpf'] == $cpf_limpo_excluir) {
+            $_SESSION['erro_usuario'] = "Você não pode se auto-excluir!";
         } else {
-            $_SESSION['erro'] = "Erro ao excluir usuário.";
-        }
-    } catch (mysqli_sql_exception $e) {
-        $_SESSION['erro'] = "Erro no banco de dados: " . $e->getMessage();
-    }
-    header("Location: cadastrar_usuario.php");
-    exit();
-}
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $nome = trim($_POST['nome']);
-    $cpf = preg_replace("/[^0-9]/", "", $_POST['cpf']); 
-    $senha = trim($_POST['senha']);
-
-    if (empty($nome) || empty($cpf) || empty($senha)) {
-        $_SESSION['erro'] = "Todos os campos são obrigatórios!";
-    } elseif (strlen($cpf) != 11) {
-        $_SESSION['erro'] = "CPF inválido! Deve conter 11 dígitos.";
-    } else {
-        try {
-        
-            $stmt = $conexao->prepare("SELECT senha FROM usuarios WHERE cpf = ?");
-            $stmt->bind_param("s", $cpf);
-            $stmt->execute();
-            $stmt->store_result();
-
-            if ($stmt->num_rows > 0) {
-                $_SESSION['erro'] = "CPF já cadastrado!";
+            $stmt_delete = $conexao->prepare("DELETE FROM usuarios WHERE cpf = ?");
+            $stmt_delete->bind_param("s", $cpf_limpo_excluir);
+            if ($stmt_delete->execute()) {
+                $_SESSION['mensagem_usuario'] = "Usuário excluído com sucesso!";
             } else {
-                
-                $senha_hash = password_hash($senha, PASSWORD_DEFAULT);
-
-              
-                $stmt = $conexao->prepare("INSERT INTO usuarios (nome, cpf, senha) VALUES (?, ?, ?)");
-                $stmt->bind_param("sss", $nome, $cpf, $senha_hash);
-                
-                if ($stmt->execute()) {
-                    $_SESSION['mensagem'] = "Usuário cadastrado com sucesso!";
-                } else {
-                    $_SESSION['erro'] = "Erro ao cadastrar usuário.";
-                }
+                $_SESSION['erro_usuario'] = "Erro ao excluir usuário: " . $stmt_delete->error;
             }
-        } catch (mysqli_sql_exception $e) {
-            $_SESSION['erro'] = "Erro no banco de dados: " . $e->getMessage();
+            $stmt_delete->close();
         }
+    } else {
+        $_SESSION['erro_usuario'] = "CPF inválido para exclusão.";
     }
     header("Location: cadastrar_usuario.php");
     exit();
 }
 
-$usuarios = [];
-try {
-    $stmt = $conexao->prepare("SELECT senha, nome, cpf FROM usuarios");
-    $stmt->execute();
-    $resultado = $stmt->get_result();
-    $usuarios = $resultado->fetch_all(MYSQLI_ASSOC);
-} catch (mysqli_sql_exception $e) {
-    $_SESSION['erro'] = "Erro ao carregar usuários: " . $e->getMessage();
+$usuarios_cadastrados = [];
+$sql_usuarios = "SELECT cpf, nome FROM usuarios ORDER BY nome";
+$resultado_usuarios = $conexao->query($sql_usuarios);
+
+if ($resultado_usuarios) {
+    while ($linha = $resultado_usuarios->fetch_assoc()) {
+        $usuarios_cadastrados[] = $linha;
+    }
+} else {
+    $_SESSION['erro_usuario'] = "Erro ao buscar usuários: " . $conexao->error;
+}
+
+if(isset($_SESSION['erro_cadastro'])) {
+    $_SESSION['erro_usuario'] = $_SESSION['erro_cadastro'];
+    unset($_SESSION['erro_cadastro']);
+}
+if(isset($_SESSION['sucesso_cadastro'])) {
+     $_SESSION['mensagem_usuario'] = $_SESSION['sucesso_cadastro'];
+     unset($_SESSION['sucesso_cadastro']);
 }
 ?>
-
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gerenciar Usuários</title>
-    <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            margin: 20px;
-            background-color: #f0f2f5;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-        .card {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 25px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        th {
-            background-color: #4a6fa5;
-            color: white;
-        }
-        tr:hover {
-            background-color: #f5f5f5;
-        }
-        .acoes a {
-            text-decoration: none;
-            margin: 0 5px;
-            padding: 5px 10px;
-            border-radius: 5px;
-            transition: all 0.3s;
-        }
-        .editar {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .editar:hover {
-            background-color: #45a049;
-        }
-        .excluir {
-            background-color: #f44336;
-            color: white;
-        }
-        .excluir:hover {
-            background-color: #da190b;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        input[type="text"], input[type="password"] {
-            width: 100%;
-            padding: 10px;
-            margin: 5px 0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            box-sizing: border-box;
-        }
-        button {
-            background-color: #4a6fa5;
-            color: white;
-            padding: 12px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            width: 100%;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #3b5998;
-        }
-        .mensagem {
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 5px;
-        }
-        .sucesso {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .erro {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
+    <link rel="stylesheet" href="style.css"> <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f0f0f0; }
+        .container { background-color: #fff; padding: 20px; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .card { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        .error { color: red; border: 1px solid red; padding: 10px; margin-bottom: 10px; background-color: #ffe0e0; }
+        .success { color: green; border: 1px solid green; padding: 10px; margin-bottom: 10px; background-color: #e0ffe0;}
+        table { width: 100%; border-collapse: collapse; margin-top:15px;}
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .acoes a { margin-right: 5px; text-decoration: none; padding: 5px 8px; border-radius:3px; }
+        .excluir { background-color: #ffe0e0; color: darkred; }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; margin-bottom: 3px; }
+        .form-group input { width: 95%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; }
+        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        h2 { border-bottom: 1px solid #eee; padding-bottom: 5px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <?php if(isset($_SESSION['mensagem'])): ?>
-            <div class="mensagem sucesso">
-                <?= $_SESSION['mensagem'] ?>
-                <?php unset($_SESSION['mensagem']); ?>
-            </div>
-        <?php endif; ?>
+        <a href="principal.php" style="display:inline-block; margin-bottom:15px;">&laquo; Voltar para Principal</a>
 
-        <?php if(isset($_SESSION['erro'])): ?>
-            <div class="mensagem erro">
-                <?= $_SESSION['erro'] ?>
-                <?php unset($_SESSION['erro']); ?>
-            </div>
-        <?php endif; ?>
         <div class="card">
             <h2>Cadastrar Novo Usuário</h2>
-            <form method="POST">
+            <?php
+            if (isset($_SESSION['erro_usuario'])) {
+                echo '<div class="error">' . htmlspecialchars($_SESSION['erro_usuario']) . '</div>';
+                unset($_SESSION['erro_usuario']);
+            }
+            if (isset($_SESSION['mensagem_usuario'])) {
+                echo '<div class="success">' . htmlspecialchars($_SESSION['mensagem_usuario']) . '</div>';
+                unset($_SESSION['mensagem_usuario']);
+            }
+            ?>
+            <form method="POST" action="salvar_cadastro.php">
                 <div class="form-group">
-                    <label>Nome Completo:</label>
-                    <input type="text" name="nome" required>
+                    <label for="nome">Nome (max 25 caracteres):</label>
+                    <input type="text" id="nome" name="nome" maxlength="25">
                 </div>
-                
                 <div class="form-group">
-                    <label>CPF (apenas números):</label>
-                    <input type="text" name="cpf" required>
+                    <label for="cpf">CPF (só números, 11 dígitos):</label>
+                    <input type="text" id="cpf" name="cpf" maxlength="11">
                 </div>
-                
                 <div class="form-group">
-                    <label>Senha:</label>
-                    <input type="password" name="senha" required>
+                    <label for="senha">Senha (max 25 caracteres):</label>
+                    <input type="password" id="senha" name="senha" maxlength="25">
                 </div>
-                
                 <button type="submit">Cadastrar Usuário</button>
             </form>
         </div>
+
         <div class="card">
             <h2>Usuários Cadastrados</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Nome</th>
-                        <th>CPF</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($usuarios as $usuario): ?>
+            <?php if (count($usuarios_cadastrados) > 0): ?>
+                <table>
+                    <thead>
                         <tr>
-                            <td><?= htmlspecialchars($usuario['nome']) ?></td>
-                            <td><?= formatarCPF($usuario['cpf']) ?></td>
-                            <td class="acoes">
-                                <a href="alterar_usuario.php?senha=<?= $usuario['senha'] ?>" class="editar">Editar</a>
-                                <a href="cadastrar_usuario.php?excluir=<?= $usuario['senha'] ?>" 
-                                   class="excluir" 
-                                   onclick="return confirm('Tem certeza que deseja excluir este usuário?')">Excluir</a>
-                            </td>
+                            <th>Nome</th>
+                            <th>CPF</th>
+                            <th>Ações</th>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($usuarios_cadastrados as $usuario): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($usuario['nome']) ?></td>
+                                <td><?= htmlspecialchars($usuario['cpf']) ?></td>
+                                <td class="acoes">
+                                    {/* <a href="alterar_usuario.php?cpf=<?= htmlspecialchars($usuario['cpf']) ?>" class="editar">Editar</a> */}
+                                    <a href="cadastrar_usuario.php?excluir_cpf=<?= htmlspecialchars($usuario['cpf']) ?>"
+                                       class="excluir"
+                                       onclick="return confirm('Tem certeza que deseja excluir este usuário: <?= htmlspecialchars(addslashes($usuario['nome'])) ?> (CPF: <?= htmlspecialchars($usuario['cpf']) ?>)?')">Excluir</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php else: ?>
+                <p>Nenhum usuário cadastrado.</p>
+            <?php endif; ?>
         </div>
     </div>
 </body>
 </html>
-
 <?php
+if (isset($conexao)) { 
+    $conexao->close();
+}
+?>

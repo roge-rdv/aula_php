@@ -1,33 +1,42 @@
 <?php
 session_start();
-require 'conexao.php';
+require 'conexao.php'; 
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $cpf = isset($_POST['cpf']) ? $_POST['cpf'] : '';
-    $senha = isset($_POST['senha']) ? $_POST['senha'] : '';
+    $cpf_form = isset($_POST['cpf']) ? $_POST['cpf'] : '';
+    $senha_form = isset($_POST['senha']) ? $_POST['senha'] : '';
 
-    if (empty($cpf) || empty($senha)) {
-        die("Preencha todos os campos!");
+    if (empty($cpf_form) || empty($senha_form)) {
+        die("CPF e Senha são obrigatórios! <a href='index.php'>Voltar</a>");
     }
 
-    $stmt = $conexao->prepare("SELECT * FROM usuarios WHERE cpf = ?");
-    $stmt->bind_param("s", $cpf);
+    $cpf_limpo_form = preg_replace("/[^0-9]/", "", $cpf_form);
+
+    $stmt = $conexao->prepare("SELECT cpf, nome, senha FROM usuarios WHERE cpf = ?");
+    $stmt->bind_param("s", $cpf_limpo_form);
     $stmt->execute();
     $resultado = $stmt->get_result();
 
-    if ($resultado->num_rows == 1) {
+    if ($resultado && $resultado->num_rows == 1) {
         $usuario_db = $resultado->fetch_assoc();
 
-        if ($senha === $usuario_db['senha']) {
+        if ($senha_form === $usuario_db['senha']) {
+            $_SESSION['usuario_cpf'] = $usuario_db['cpf']; 
             $_SESSION['nome'] = $usuario_db['nome'];
             $_SESSION['logado'] = true;
+            
             header("Location: principal.php");
             exit();
         } else {
-            echo "Senha incorreta!";
+            echo "<h2>Login Falhou!</h2><p>Senha incorreta.</p><a href='index.php'>Tentar novamente</a>";
         }
     } else {
-        echo "Usuário não encontrado!";
+        echo "<h2>Login Falhou!</h2><p>Usuário com CPF informado não encontrado.</p><a href='index.php'>Tentar novamente</a>";
     }
+    $stmt->close();
+    $conexao->close();
+} else {
+    header("Location: index.php");
+    exit();
 }
 ?>

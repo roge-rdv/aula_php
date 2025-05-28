@@ -2,25 +2,41 @@
 session_start();
 require 'conexao.php';
 
-// Verifica se está logado
 if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
     header("Location: index.php");
     exit();
 }
 
-// Processa o cadastro do filme
+if (isset($_GET['excluir_filme'])) {
+    $filme_id = intval($_GET['excluir_filme']);
+    
+    try {
+        $stmt = $conexao->prepare("DELETE FROM filmes WHERE filme = ?");
+        $stmt->bind_param("i", $filme_id);
+        
+        if ($stmt->execute()) {
+            $_SESSION['mensagem'] = "Filme excluído com sucesso!";
+        } else {
+            $_SESSION['erro'] = "Erro ao excluir filme.";
+        }
+    } catch (mysqli_sql_exception $e) {
+        $_SESSION['erro'] = "Erro no banco de dados: " . $e->getMessage();
+    }
+    header("Location: cadastrar_filme.php");
+    exit();
+}
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $nome = trim($_POST['nome']);
     $ano = trim($_POST['ano']);
     $genero_id = intval($_POST['genero']);
-    $status = isset($_POST['status']) ? 1 : 0;
 
     if (empty($nome) || empty($ano) || $genero_id <= 0) {
         $_SESSION['erro'] = "Preencha todos os campos obrigatórios!";
     } else {
         try {
-            $stmt = $conexao->prepare("INSERT INTO filmes (nome, ano, genero_id, status) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("ssii", $nome, $ano, $genero_id, $status);
+            $stmt = $conexao->prepare("INSERT INTO filmes (descricao, ano, genero) VALUES (?, ?, ?)");
+            $stmt->bind_param("sii", $nome, $ano, $genero_id);
             
             if ($stmt->execute()) {
                 $_SESSION['mensagem'] = "Filme cadastrado com sucesso!";
@@ -35,15 +51,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     exit();
 }
 
-// Busca os gêneros ativos (status=1)
 $generos = [];
 try {
-    $stmt = $conexao->prepare("SELECT id, descricao FROM generos WHERE status = 1");
+    $stmt = $conexao->prepare("SELECT genero, descricao FROM generos WHERE status = 1");
     $stmt->execute();
     $resultado = $stmt->get_result();
     $generos = $resultado->fetch_all(MYSQLI_ASSOC);
 } catch (mysqli_sql_exception $e) {
     $_SESSION['erro'] = "Erro ao carregar gêneros: " . $e->getMessage();
+}
+
+$filmes = [];
+try {
+    $stmt = $conexao->prepare("
+        SELECT f.filme, f.descricao AS nome_filme, f.ano, g.descricao AS genero 
+        FROM filmes f
+        INNER JOIN generos g ON f.genero = g.genero
+    ");
+    $stmt->execute();
+    $resultado = $stmt->get_result();
+    $filmes = $resultado->fetch_all(MYSQLI_ASSOC);
+} catch (mysqli_sql_exception $e) {
+    $_SESSION['erro'] = "Erro ao carregar filmes: " . $e->getMessage();
 }
 ?>
 
@@ -54,7 +83,6 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cadastrar Filme</title>
     <style>
-        /* Estilo igual ao cadastrar_usuario.php */
         body {
             font-family: 'Arial', sans-serif;
             margin: 20px;
@@ -110,14 +138,49 @@ try {
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-        .checkbox-group {
-            margin: 15px 0;
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #4a6fa5;
+            color: white;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .acoes a {
+            text-decoration: none;
+            margin: 0 5px;
+            padding: 5px 10px;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        .editar {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .editar:hover {
+            background-color: #45a049;
+        }
+        .excluir {
+            background-color: #f44336;
+            color: white;
+        }
+        .excluir:hover {
+            background-color: #da190b;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Mensagens de feedback -->
+        <a href="principal.php" style="display:inline-block; margin-bottom:15px;">&laquo; Voltar para Principal</a>
         <?php if(isset($_SESSION['mensagem'])): ?>
             <div class="mensagem sucesso">
                 <?= $_SESSION['mensagem'] ?>
@@ -132,7 +195,6 @@ try {
             </div>
         <?php endif; ?>
 
-        <!-- Formulário de cadastro -->
         <div class="card">
             <h2>Cadastrar Novo Filme</h2>
             <form method="POST">
@@ -151,19 +213,48 @@ try {
                     <select name="genero" required>
                         <option value="">Selecione um gênero</option>
                         <?php foreach ($generos as $genero): ?>
-                            <option value="<?= $genero['id'] ?>"><?= htmlspecialchars($genero['descricao']) ?></option>
+                            <option value="<?= $genero['genero'] ?>">
+                                <?= htmlspecialchars($genero['descricao']) ?>
+                            </option>
                         <?php endforeach; ?>
                     </select>
-                </div>
-                
-                <div class="checkbox-group">
-                    <label>
-                        <input type="checkbox" name="status" value="1" checked> Ativo
-                    </label>
                 </div>
 
                 <button type="submit">Cadastrar Filme</button>
             </form>
+        </div>
+
+        <div class="card">
+            <h2>Filmes Cadastrados</h2>
+            <?php if (!empty($filmes)): ?>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Filme</th>
+                            <th>Ano</th>
+                            <th>Gênero</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($filmes as $filme): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($filme['nome_filme']) ?></td>
+                                <td><?= htmlspecialchars($filme['ano']) ?></td>
+                                <td><?= htmlspecialchars($filme['genero']) ?></td>
+                                <td class="acoes">
+                                    <a href="alterar_filme.php?filme=<?= $filme['filme'] ?>" class="editar">Editar</a>
+                                    <a href="cadastrar_filme.php?excluir_filme=<?= $filme['filme'] ?>" 
+                                       class="excluir" 
+                                       onclick="return confirm('Tem certeza que deseja excluir este filme?')">Excluir</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php else: ?>
+                <p>Nenhum filme cadastrado ainda.</p>
+            <?php endif; ?>
         </div>
     </div>
 </body>
