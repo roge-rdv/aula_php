@@ -12,10 +12,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $cpf_limpo_form = preg_replace("/[^0-9]/", "", $cpf_form);
 
-    $stmt = $conexao->prepare("SELECT cpf, nome, senha FROM usuarios WHERE cpf = ?");
-    $stmt->bind_param("s", $cpf_limpo_form);
-    $stmt->execute();
-    $resultado = $stmt->get_result();
+    $sql = "SELECT cpf, nome, senha FROM usuarios WHERE cpf = '$cpf_limpo_form'";
+    $resultado = $conexao->query($sql);
 
     if ($resultado && $resultado->num_rows == 1) {
         $usuario_db = $resultado->fetch_assoc();
@@ -33,7 +31,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         echo "<h2>Login Falhou!</h2><p>Usuário com CPF informado não encontrado.</p><a href='index.php'>Tentar novamente</a>";
     }
-    $stmt->close();
     $conexao->close();
 } else {
     header("Location: index.php");

@@ -9,24 +9,17 @@ if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
 
 if (isset($_GET['excluir_cpf'])) {
     $cpf_para_excluir = $_GET['excluir_cpf'];
-
     $cpf_limpo_excluir = preg_replace("/[^0-9]/", "", $cpf_para_excluir);
 
-    if (strlen($cpf_limpo_excluir) == 11) {
-        if (isset($_SESSION['usuario_cpf']) && $_SESSION['usuario_cpf'] == $cpf_limpo_excluir) {
-            $_SESSION['erro_usuario'] = "Você não pode se auto-excluir!";
-        } else {
-            $stmt_delete = $conexao->prepare("DELETE FROM usuarios WHERE cpf = ?");
-            $stmt_delete->bind_param("s", $cpf_limpo_excluir);
-            if ($stmt_delete->execute()) {
-                $_SESSION['mensagem_usuario'] = "Usuário excluído com sucesso!";
-            } else {
-                $_SESSION['erro_usuario'] = "Erro ao excluir usuário: " . $stmt_delete->error;
-            }
-            $stmt_delete->close();
-        }
+    if (isset($_SESSION['usuario_cpf']) && $_SESSION['usuario_cpf'] == $cpf_limpo_excluir) {
+        $_SESSION['erro_usuario'] = "Você não pode se auto-excluir!";
     } else {
-        $_SESSION['erro_usuario'] = "CPF inválido para exclusão.";
+        $sql = "DELETE FROM usuarios WHERE cpf = '$cpf_limpo_excluir'";
+        if ($conexao->query($sql)) {
+            $_SESSION['mensagem_usuario'] = "Usuário excluído com sucesso!";
+        } else {
+            $_SESSION['erro_usuario'] = "Erro ao excluir usuário.";
+        }
     }
     header("Location: cadastrar_usuario.php");
     exit();
@@ -40,8 +33,6 @@ if ($resultado_usuarios) {
     while ($linha = $resultado_usuarios->fetch_assoc()) {
         $usuarios_cadastrados[] = $linha;
     }
-} else {
-    $_SESSION['erro_usuario'] = "Erro ao buscar usuários: " . $conexao->error;
 }
 
 if(isset($_SESSION['erro_cadastro'])) {
@@ -126,7 +117,6 @@ if(isset($_SESSION['sucesso_cadastro'])) {
                                 <td><?= htmlspecialchars($usuario['nome']) ?></td>
                                 <td><?= htmlspecialchars($usuario['cpf']) ?></td>
                                 <td class="acoes">
-                                    {/* <a href="alterar_usuario.php?cpf=<?= htmlspecialchars($usuario['cpf']) ?>" class="editar">Editar</a> */}
                                     <a href="cadastrar_usuario.php?excluir_cpf=<?= htmlspecialchars($usuario['cpf']) ?>"
                                        class="excluir"
                                        onclick="return confirm('Tem certeza que deseja excluir este usuário: <?= htmlspecialchars(addslashes($usuario['nome'])) ?> (CPF: <?= htmlspecialchars($usuario['cpf']) ?>)?')">Excluir</a>

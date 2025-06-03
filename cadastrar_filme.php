@@ -9,71 +9,93 @@ if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
 
 if (isset($_GET['excluir_filme'])) {
     $filme_id = intval($_GET['excluir_filme']);
-    
-    try {
-        $stmt = $conexao->prepare("DELETE FROM filmes WHERE filme = ?");
-        $stmt->bind_param("i", $filme_id);
-        
-        if ($stmt->execute()) {
-            $_SESSION['mensagem'] = "Filme excluído com sucesso!";
-        } else {
-            $_SESSION['erro'] = "Erro ao excluir filme.";
-        }
-    } catch (mysqli_sql_exception $e) {
-        $_SESSION['erro'] = "Erro no banco de dados: " . $e->getMessage();
+    $sql = "DELETE FROM filmes WHERE filme = $filme_id";
+    if ($conexao->query($sql)) {
+        $_SESSION['mensagem'] = "Filme excluído com sucesso!";
+    } else {
+        $_SESSION['erro'] = "Erro ao excluir filme.";
     }
     header("Location: cadastrar_filme.php");
     exit();
 }
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $nome = trim($_POST['nome']);
-    $ano = trim($_POST['ano']);
+if (isset($_POST['alterar_genero_filme'])) {
+    $filme_id = intval($_POST['filme_id']);
+    $novo_genero = intval($_POST['novo_genero']);
+    $sql = "UPDATE filmes SET genero = $novo_genero WHERE filme = $filme_id";
+    if ($conexao->query($sql)) {
+        $_SESSION['mensagem'] = "Gênero do filme alterado com sucesso!";
+    } else {
+        $_SESSION['erro'] = "Erro ao alterar gênero do filme.";
+    }
+    header("Location: cadastrar_filme.php" . (isset($_GET['filtro_genero']) ? "?filtro_genero=" . intval($_GET['filtro_genero']) : ""));
+    exit();
+}
+
+if (isset($_POST['salvar_edicao_filme'])) {
+    $filme_id = intval($_POST['filme_id']);
+    $novo_nome = $_POST['novo_nome'];
+    $novo_genero = intval($_POST['novo_genero']);
+    $sql = "UPDATE filmes SET descricao = '$novo_nome', genero = $novo_genero WHERE filme = $filme_id";
+    if ($conexao->query($sql)) {
+        $_SESSION['mensagem'] = "Filme alterado com sucesso!";
+    } else {
+        $_SESSION['erro'] = "Erro ao alterar filme.";
+    }
+    header("Location: cadastrar_filme.php" . (isset($_GET['filtro_genero']) ? "?filtro_genero=" . intval($_GET['filtro_genero']) : ""));
+    exit();
+}
+
+if (
+    $_SERVER["REQUEST_METHOD"] == "POST"
+    && !isset($_POST['alterar_genero_filme'])
+    && !isset($_POST['salvar_edicao_filme'])
+) {
+    $nome = $_POST['nome'];
+    $ano = $_POST['ano'];
     $genero_id = intval($_POST['genero']);
 
     if (empty($nome) || empty($ano) || $genero_id <= 0) {
         $_SESSION['erro'] = "Preencha todos os campos obrigatórios!";
     } else {
-        try {
-            $stmt = $conexao->prepare("INSERT INTO filmes (descricao, ano, genero) VALUES (?, ?, ?)");
-            $stmt->bind_param("sii", $nome, $ano, $genero_id);
-            
-            if ($stmt->execute()) {
-                $_SESSION['mensagem'] = "Filme cadastrado com sucesso!";
-            } else {
-                $_SESSION['erro'] = "Erro ao cadastrar filme.";
-            }
-        } catch (mysqli_sql_exception $e) {
-            $_SESSION['erro'] = "Erro no banco de dados: " . $e->getMessage();
+        $sql = "INSERT INTO filmes (descricao, ano, genero) VALUES ('$nome', $ano, $genero_id)";
+        if ($conexao->query($sql)) {
+            $_SESSION['mensagem'] = "Filme cadastrado com sucesso!";
+        } else {
+            $_SESSION['erro'] = "Erro ao cadastrar filme.";
         }
     }
     header("Location: cadastrar_filme.php");
     exit();
 }
 
+$filtro_genero = isset($_GET['filtro_genero']) ? intval($_GET['filtro_genero']) : 0;
+
 $generos = [];
-try {
-    $stmt = $conexao->prepare("SELECT genero, descricao FROM generos WHERE status = 1");
-    $stmt->execute();
-    $resultado = $stmt->get_result();
-    $generos = $resultado->fetch_all(MYSQLI_ASSOC);
-} catch (mysqli_sql_exception $e) {
-    $_SESSION['erro'] = "Erro ao carregar gêneros: " . $e->getMessage();
+$sql_generos = "SELECT genero, descricao FROM generos WHERE status = 1";
+$resultado = $conexao->query($sql_generos);
+if ($resultado) {
+    while ($row = $resultado->fetch_assoc()) {
+        $generos[] = $row;
+    }
 }
 
 $filmes = [];
-try {
-    $stmt = $conexao->prepare("
-        SELECT f.filme, f.descricao AS nome_filme, f.ano, g.descricao AS genero 
-        FROM filmes f
-        INNER JOIN generos g ON f.genero = g.genero
-    ");
-    $stmt->execute();
-    $resultado = $stmt->get_result();
-    $filmes = $resultado->fetch_all(MYSQLI_ASSOC);
-} catch (mysqli_sql_exception $e) {
-    $_SESSION['erro'] = "Erro ao carregar filmes: " . $e->getMessage();
+if ($filtro_genero > 0) {
+    $sql_filmes = "SELECT f.filme, f.descricao AS nome_filme, f.ano, g.descricao AS genero 
+                   FROM filmes f INNER JOIN generos g ON f.genero = g.genero WHERE f.genero = $filtro_genero";
+} else {
+    $sql_filmes = "SELECT f.filme, f.descricao AS nome_filme, f.ano, g.descricao AS genero 
+                   FROM filmes f INNER JOIN generos g ON f.genero = g.genero";
 }
+$resultado = $conexao->query($sql_filmes);
+if ($resultado) {
+    while ($row = $resultado->fetch_assoc()) {
+        $filmes[] = $row;
+    }
+}
+
+$editar_filme_id = isset($_GET['editar_filme']) ? intval($_GET['editar_filme']) : 0;
 ?>
 
 <!DOCTYPE html>
@@ -239,15 +261,41 @@ try {
                     <tbody>
                         <?php foreach ($filmes as $filme): ?>
                             <tr>
-                                <td><?= htmlspecialchars($filme['nome_filme']) ?></td>
-                                <td><?= htmlspecialchars($filme['ano']) ?></td>
-                                <td><?= htmlspecialchars($filme['genero']) ?></td>
-                                <td class="acoes">
-                                    <a href="alterar_filme.php?filme=<?= $filme['filme'] ?>" class="editar">Editar</a>
-                                    <a href="cadastrar_filme.php?excluir_filme=<?= $filme['filme'] ?>" 
-                                       class="excluir" 
-                                       onclick="return confirm('Tem certeza que deseja excluir este filme?')">Excluir</a>
-                                </td>
+                                <?php if ($editar_filme_id === intval($filme['filme'])): ?>
+                                    <form method="post" style="display:contents;">
+                                        <td>
+                                            <input type="text" name="novo_nome" value="<?= htmlspecialchars($filme['nome_filme']) ?>" required style="width:95%;">
+                                        </td>
+                                        <td><?= htmlspecialchars($filme['ano']) ?></td>
+                                        <td>
+                                            <select name="novo_genero" required>
+                                                <option value="">Selecione</option>
+                                                <?php foreach ($generos as $genero): ?>
+                                                    <option value="<?= $genero['genero'] ?>" <?= ($genero['descricao'] == $filme['genero']) ? 'selected' : '' ?>>
+                                                        <?= htmlspecialchars($genero['descricao']) ?>
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </td>
+                                        <td class="acoes">
+                                            <input type="hidden" name="filme_id" value="<?= $filme['filme'] ?>">
+                                            <button type="submit" name="salvar_edicao_filme" style="padding: 5px 10px;">Salvar</button>
+                                            <a href="cadastrar_filme.php<?= isset($_GET['filtro_genero']) ? '?filtro_genero=' . intval($_GET['filtro_genero']) : '' ?>" style="margin-left:5px;">Cancelar</a>
+                                        </td>
+                                    </form>
+                                <?php else: ?>
+                                    <td><?= htmlspecialchars($filme['nome_filme']) ?></td>
+                                    <td><?= htmlspecialchars($filme['ano']) ?></td>
+                                    <td>
+                                        <?= htmlspecialchars($filme['genero']) ?>
+                                    </td>
+                                    <td class="acoes">
+                                        <a href="cadastrar_filme.php?editar_filme=<?= $filme['filme'] ?><?= isset($_GET['filtro_genero']) ? '&filtro_genero=' . intval($_GET['filtro_genero']) : '' ?>" class="editar">Editar</a>
+                                        <a href="cadastrar_filme.php?excluir_filme=<?= $filme['filme'] ?>" 
+                                           class="excluir" 
+                                           onclick="return confirm('Tem certeza que deseja excluir este filme?')">Excluir</a>
+                                    </td>
+                                <?php endif; ?>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>
