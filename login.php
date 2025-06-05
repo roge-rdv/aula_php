@@ -1,6 +1,9 @@
+[file name]: login.php
+[file content begin]
 <?php
 session_start();
-require 'conexao.php'; 
+require 'conexao.php';
+require 'validacoes.php'; // ADICIONADO
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $cpf_form = isset($_POST['cpf']) ? $_POST['cpf'] : '';
@@ -11,6 +14,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     $cpf_limpo_form = preg_replace("/[^0-9]/", "", $cpf_form);
+
+    // VALIDAÇÃO CPF ANTES DE CONSULTAR BANCO
+    if (!validarCPF($cpf_limpo_form)) {
+        die("CPF inválido! <a href='index.php'>Voltar</a>");
+    }
 
     $sql = "SELECT cpf, nome, senha FROM usuarios WHERE cpf = '$cpf_limpo_form'";
     $resultado = $conexao->query($sql);
