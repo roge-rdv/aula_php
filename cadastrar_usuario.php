@@ -7,6 +7,44 @@ if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
     exit();
 }
 
+if (isset($_POST['editar_usuario'])) {
+    $cpf_original = $_POST['cpf_original'];
+    $nome_novo = trim($_POST['nome_edit']);
+    $cpf_novo = preg_replace("/[^0-9]/", "", $_POST['cpf_edit']);
+    $senha_nova = $_POST['senha_edit'];
+
+    if (empty($nome_novo) || empty($cpf_novo)) {
+        $_SESSION['erro_usuario'] = "Nome e CPF são obrigatórios!";
+    } elseif (strlen($cpf_novo) != 11) {
+        $_SESSION['erro_usuario'] = "CPF deve ter exatamente 11 dígitos!";
+    } else {
+        if ($cpf_novo != $cpf_original) {
+            $sql_check = "SELECT cpf FROM usuarios WHERE cpf = '$cpf_novo'";
+            $result_check = $conexao->query($sql_check);
+            if ($result_check && $result_check->num_rows > 0) {
+                $_SESSION['erro_usuario'] = "CPF já existe no sistema!";
+            }
+        }
+
+        if (!isset($_SESSION['erro_usuario'])) {
+            if (!empty($senha_nova)) {
+                $senha_hash = password_hash($senha_nova, PASSWORD_DEFAULT);
+                $sql_update = "UPDATE usuarios SET nome = '$nome_novo', cpf = '$cpf_novo', senha = '$senha_hash' WHERE cpf = '$cpf_original'";
+            } else {
+                $sql_update = "UPDATE usuarios SET nome = '$nome_novo', cpf = '$cpf_novo' WHERE cpf = '$cpf_original'";
+            }
+
+            if ($conexao->query($sql_update)) {
+                $_SESSION['mensagem_usuario'] = "Usuário atualizado com sucesso!";
+            } else {
+                $_SESSION['erro_usuario'] = "Erro ao atualizar usuário.";
+            }
+        }
+    }
+    header("Location: cadastrar_usuario.php");
+    exit();
+}
+
 if (isset($_GET['excluir_cpf'])) {
     $cpf_para_excluir = $_GET['excluir_cpf'];
     $cpf_limpo_excluir = preg_replace("/[^0-9]/", "", $cpf_para_excluir);
@@ -23,6 +61,17 @@ if (isset($_GET['excluir_cpf'])) {
     }
     header("Location: cadastrar_usuario.php");
     exit();
+}
+
+$usuario_editando = null;
+if (isset($_GET['editar_cpf'])) {
+    $cpf_editar = $_GET['editar_cpf'];
+    $cpf_limpo_editar = preg_replace("/[^0-9]/", "", $cpf_editar);
+    $sql_editar = "SELECT cpf, nome FROM usuarios WHERE cpf = '$cpf_limpo_editar'";
+    $resultado_editar = $conexao->query($sql_editar);
+    if ($resultado_editar && $resultado_editar->num_rows > 0) {
+        $usuario_editando = $resultado_editar->fetch_assoc();
+    }
 }
 
 $usuarios_cadastrados = [];
@@ -59,6 +108,8 @@ if(isset($_SESSION['sucesso_cadastro'])) {
         th { background-color: #f2f2f2; }
         .acoes a { margin-right: 5px; text-decoration: none; padding: 5px 8px; border-radius:3px; }
         .excluir { background-color: #ffe0e0; color: darkred; }
+        .editar { background-color: #e0f0ff; color: darkblue; }
+        .cancelar { background-color: #f0f0f0; color: #333; }
         .form-group { margin-bottom: 10px; }
         .form-group label { display: block; margin-bottom: 3px; }
         .form-group input { width: 95%; padding: 8px; border: 1px solid #ccc; border-radius: 3px; }
@@ -71,6 +122,34 @@ if(isset($_SESSION['sucesso_cadastro'])) {
     <div class="container">
         <a href="principal.php" style="display:inline-block; margin-bottom:15px;">&laquo; Voltar para Principal</a>
 
+        <?php if ($usuario_editando): ?>
+        <div class="card">
+            <h2>Editar Usuário</h2>
+            <?php
+            if (isset($_SESSION['erro_usuario'])) {
+                echo '<div class="error">' . htmlspecialchars($_SESSION['erro_usuario']) . '</div>';
+                unset($_SESSION['erro_usuario']);
+            }
+            ?>
+            <form method="POST" action="cadastrar_usuario.php">
+                <input type="hidden" name="cpf_original" value="<?= htmlspecialchars($usuario_editando['cpf']) ?>">
+                <div class="form-group">
+                    <label for="nome_edit">Nome (max 25 caracteres):</label>
+                    <input type="text" id="nome_edit" name="nome_edit" maxlength="25" value="<?= htmlspecialchars($usuario_editando['nome']) ?>" required>
+                </div>
+                <div class="form-group">
+                    <label for="cpf_edit">CPF (só números, 11 dígitos):</label>
+                    <input type="text" id="cpf_edit" name="cpf_edit" maxlength="11" value="<?= htmlspecialchars($usuario_editando['cpf']) ?>" required>
+                </div>
+                <div class="form-group">
+                    <label for="senha_edit">Nova Senha (deixe vazio para manter a atual):</label>
+                    <input type="password" id="senha_edit" name="senha_edit" maxlength="25">
+                </div>
+                <button type="submit" name="editar_usuario">Salvar Alterações</button>
+                <a href="cadastrar_usuario.php" class="cancelar" style="display:inline-block; padding:10px 15px; margin-left:10px; text-decoration:none; border-radius:3px;">Cancelar</a>
+            </form>
+        </div>
+        <?php else: ?>
         <div class="card">
             <h2>Cadastrar Novo Usuário</h2>
             <?php
@@ -99,6 +178,7 @@ if(isset($_SESSION['sucesso_cadastro'])) {
                 <button type="submit">Cadastrar Usuário</button>
             </form>
         </div>
+        <?php endif; ?>
 
         <div class="card">
             <h2>Usuários Cadastrados</h2>
@@ -117,6 +197,8 @@ if(isset($_SESSION['sucesso_cadastro'])) {
                                 <td><?= htmlspecialchars($usuario['nome']) ?></td>
                                 <td><?= htmlspecialchars($usuario['cpf']) ?></td>
                                 <td class="acoes">
+                                    <a href="cadastrar_usuario.php?editar_cpf=<?= htmlspecialchars($usuario['cpf']) ?>"
+                                       class="editar">Editar</a>
                                     <a href="cadastrar_usuario.php?excluir_cpf=<?= htmlspecialchars($usuario['cpf']) ?>"
                                        class="excluir"
                                        onclick="return confirm('Tem certeza que deseja excluir este usuário: <?= htmlspecialchars(addslashes($usuario['nome'])) ?> (CPF: <?= htmlspecialchars($usuario['cpf']) ?>)?')">Excluir</a>

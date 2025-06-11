@@ -1,5 +1,4 @@
-[file name]: validacoes.php
-[file content begin]
+
 <?php
 
 function validarCPF($cpf) {
@@ -61,4 +60,4 @@ function validarSenha($senha) {
 
     return true;
 }
-[file content end]
+?>
