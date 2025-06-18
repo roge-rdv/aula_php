@@ -1,35 +1,55 @@
 <?php
 session_start();
 require 'conexao.php';
+require 'validacao.php';
 
+// checa login
 if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
     header("Location: index.php");
     exit();
 }
 
+// editar usuario
 if (isset($_POST['editar_usuario'])) {
     $cpf_original = $_POST['cpf_original'];
     $nome_novo = trim($_POST['nome_edit']);
     $cpf_novo = preg_replace("/[^0-9]/", "", $_POST['cpf_edit']);
     $senha_nova = $_POST['senha_edit'];
 
+    // valida campos
     if (empty($nome_novo) || empty($cpf_novo)) {
         $_SESSION['erro_usuario'] = "Nome e CPF são obrigatórios!";
+        $_SESSION['editar_cpf'] = $cpf_original;
+        header("Location: cadastrar_usuario.php?editar_cpf=$cpf_original");
+        exit();
     } elseif (strlen($cpf_novo) != 11) {
         $_SESSION['erro_usuario'] = "CPF deve ter exatamente 11 dígitos!";
+        $_SESSION['editar_cpf'] = $cpf_original;
+        header("Location: cadastrar_usuario.php?editar_cpf=$cpf_original");
+        exit();
+    } elseif (!empty($senha_nova) && !validarSenha($senha_nova)) {
+        // senha tem q ser forte
+        $_SESSION['erro_usuario'] = "A senha deve ter no mínimo 6 caracteres, com pelo menos 1 maiúscula, 1 minúscula, 1 número e 1 caractere especial!";
+        $_SESSION['editar_cpf'] = $cpf_original;
+        header("Location: cadastrar_usuario.php?editar_cpf=$cpf_original");
+        exit();
     } else {
+        // se mudou o cpf, checa se ja existe
         if ($cpf_novo != $cpf_original) {
             $sql_check = "SELECT cpf FROM usuarios WHERE cpf = '$cpf_novo'";
             $result_check = $conexao->query($sql_check);
             if ($result_check && $result_check->num_rows > 0) {
                 $_SESSION['erro_usuario'] = "CPF já existe no sistema!";
+                $_SESSION['editar_cpf'] = $cpf_original;
+                header("Location: cadastrar_usuario.php?editar_cpf=$cpf_original");
+                exit();
             }
         }
 
+        // faz update
         if (!isset($_SESSION['erro_usuario'])) {
             if (!empty($senha_nova)) {
-                $senha_hash = password_hash($senha_nova, PASSWORD_DEFAULT);
-                $sql_update = "UPDATE usuarios SET nome = '$nome_novo', cpf = '$cpf_novo', senha = '$senha_hash' WHERE cpf = '$cpf_original'";
+                $sql_update = "UPDATE usuarios SET nome = '$nome_novo', cpf = '$cpf_novo', senha = '$senha_nova' WHERE cpf = '$cpf_original'";
             } else {
                 $sql_update = "UPDATE usuarios SET nome = '$nome_novo', cpf = '$cpf_novo' WHERE cpf = '$cpf_original'";
             }
@@ -38,6 +58,9 @@ if (isset($_POST['editar_usuario'])) {
                 $_SESSION['mensagem_usuario'] = "Usuário atualizado com sucesso!";
             } else {
                 $_SESSION['erro_usuario'] = "Erro ao atualizar usuário.";
+                $_SESSION['editar_cpf'] = $cpf_original;
+                header("Location: cadastrar_usuario.php?editar_cpf=$cpf_original");
+                exit();
             }
         }
     }
@@ -45,10 +68,12 @@ if (isset($_POST['editar_usuario'])) {
     exit();
 }
 
+// excluir usuario
 if (isset($_GET['excluir_cpf'])) {
     $cpf_para_excluir = $_GET['excluir_cpf'];
     $cpf_limpo_excluir = preg_replace("/[^0-9]/", "", $cpf_para_excluir);
 
+    // n deixa excluir a si msm
     if (isset($_SESSION['usuario_cpf']) && $_SESSION['usuario_cpf'] == $cpf_limpo_excluir) {
         $_SESSION['erro_usuario'] = "Você não pode se auto-excluir!";
     } else {
@@ -63,9 +88,16 @@ if (isset($_GET['excluir_cpf'])) {
     exit();
 }
 
+// busca usuario pra editar
 $usuario_editando = null;
+$cpf_editar = null;
 if (isset($_GET['editar_cpf'])) {
     $cpf_editar = $_GET['editar_cpf'];
+} elseif (isset($_SESSION['editar_cpf'])) {
+    $cpf_editar = $_SESSION['editar_cpf'];
+    unset($_SESSION['editar_cpf']);
+}
+if ($cpf_editar) {
     $cpf_limpo_editar = preg_replace("/[^0-9]/", "", $cpf_editar);
     $sql_editar = "SELECT cpf, nome FROM usuarios WHERE cpf = '$cpf_limpo_editar'";
     $resultado_editar = $conexao->query($sql_editar);
@@ -74,6 +106,7 @@ if (isset($_GET['editar_cpf'])) {
     }
 }
 
+// pega todos usuarios
 $usuarios_cadastrados = [];
 $sql_usuarios = "SELECT cpf, nome FROM usuarios ORDER BY nome";
 $resultado_usuarios = $conexao->query($sql_usuarios);
@@ -84,6 +117,7 @@ if ($resultado_usuarios) {
     }
 }
 
+// msgs de erro/sucesso
 if(isset($_SESSION['erro_cadastro'])) {
     $_SESSION['erro_usuario'] = $_SESSION['erro_cadastro'];
     unset($_SESSION['erro_cadastro']);
@@ -165,15 +199,15 @@ if(isset($_SESSION['sucesso_cadastro'])) {
             <form method="POST" action="salvar_cadastro.php">
                 <div class="form-group">
                     <label for="nome">Nome (max 25 caracteres):</label>
-                    <input type="text" id="nome" name="nome" maxlength="25">
+                    <input type="text" id="nome" name="nome" maxlength="25" required>
                 </div>
                 <div class="form-group">
                     <label for="cpf">CPF (só números, 11 dígitos):</label>
-                    <input type="text" id="cpf" name="cpf" maxlength="11">
+                    <input type="text" id="cpf" name="cpf" maxlength="11" required>
                 </div>
                 <div class="form-group">
                     <label for="senha">Senha (max 25 caracteres):</label>
-                    <input type="password" id="senha" name="senha" maxlength="25">
+                    <input type="password" id="senha" name="senha" maxlength="25" required>
                 </div>
                 <button type="submit">Cadastrar Usuário</button>
             </form>

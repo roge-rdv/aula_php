@@ -2,12 +2,15 @@
 session_start();
 require 'conexao.php';
 
+// checa se ta logado msm
 if (!isset($_SESSION['logado']) || $_SESSION['logado'] !== true) {
     header("Location: index.php");
     exit();
 }
 
+// excluir filme
 if (isset($_GET['excluir_filme'])) {
+    // pega id do filme
     $filme_id = intval($_GET['excluir_filme']);
     $sql = "DELETE FROM filmes WHERE filme = $filme_id";
     if ($conexao->query($sql)) {
@@ -19,6 +22,7 @@ if (isset($_GET['excluir_filme'])) {
     exit();
 }
 
+// muda genero do filme
 if (isset($_POST['alterar_genero_filme'])) {
     $filme_id = intval($_POST['filme_id']);
     $novo_genero = intval($_POST['novo_genero']);
@@ -32,11 +36,14 @@ if (isset($_POST['alterar_genero_filme'])) {
     exit();
 }
 
+// editar filme (nome, ano, genero)
 if (isset($_POST['salvar_edicao_filme'])) {
     $filme_id = intval($_POST['filme_id']);
     $novo_nome = $_POST['novo_nome'];
+    $novo_ano = $_POST['novo_ano'];
     $novo_genero = intval($_POST['novo_genero']);
-    $sql = "UPDATE filmes SET descricao = '$novo_nome', genero = $novo_genero WHERE filme = $filme_id";
+    // aqui faz update
+    $sql = "UPDATE filmes SET descricao = '$novo_nome', ano = '$novo_ano', genero = $novo_genero WHERE filme = $filme_id";
     if ($conexao->query($sql)) {
         $_SESSION['mensagem'] = "Filme alterado com sucesso!";
     } else {
@@ -46,6 +53,7 @@ if (isset($_POST['salvar_edicao_filme'])) {
     exit();
 }
 
+// cadastrar novo filme
 if (
     $_SERVER["REQUEST_METHOD"] == "POST"
     && !isset($_POST['alterar_genero_filme'])
@@ -55,9 +63,11 @@ if (
     $ano = $_POST['ano'];
     $genero_id = intval($_POST['genero']);
 
+    // valida se preencheu td
     if (empty($nome) || empty($ano) || $genero_id <= 0) {
         $_SESSION['erro'] = "Preencha todos os campos obrigatórios!";
     } else {
+        // insere no banco
         $sql = "INSERT INTO filmes (descricao, ano, genero) VALUES ('$nome', $ano, $genero_id)";
         if ($conexao->query($sql)) {
             $_SESSION['mensagem'] = "Filme cadastrado com sucesso!";
@@ -69,8 +79,10 @@ if (
     exit();
 }
 
+// pega filtro se tiver
 $filtro_genero = isset($_GET['filtro_genero']) ? intval($_GET['filtro_genero']) : 0;
 
+// pega generos do banco
 $generos = [];
 $sql_generos = "SELECT genero, descricao FROM generos WHERE status = 1";
 $resultado = $conexao->query($sql_generos);
@@ -80,6 +92,7 @@ if ($resultado) {
     }
 }
 
+// pega filmes
 $filmes = [];
 if ($filtro_genero > 0) {
     $sql_filmes = "SELECT f.filme, f.descricao AS nome_filme, f.ano, g.descricao AS genero 
@@ -95,6 +108,7 @@ if ($resultado) {
     }
 }
 
+// se ta editando algum filme
 $editar_filme_id = isset($_GET['editar_filme']) ? intval($_GET['editar_filme']) : 0;
 ?>
 
@@ -266,7 +280,9 @@ $editar_filme_id = isset($_GET['editar_filme']) ? intval($_GET['editar_filme']) 
                                         <td>
                                             <input type="text" name="novo_nome" value="<?= htmlspecialchars($filme['nome_filme']) ?>" required style="width:95%;">
                                         </td>
-                                        <td><?= htmlspecialchars($filme['ano']) ?></td>
+                                        <td>
+                                            <input type="text" name="novo_ano" value="<?= htmlspecialchars($filme['ano']) ?>" required style="width:95%;">
+                                        </td>
                                         <td>
                                             <select name="novo_genero" required>
                                                 <option value="">Selecione</option>
